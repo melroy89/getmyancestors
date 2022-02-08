@@ -94,9 +94,11 @@ class Session:
     :param timeout: time before retry a request
     """
 
-    def __init__(self, username, password, verbose=False, logfile=False, timeout=60):
+    def __init__(self, username, password, app_key, base='https://integration.familysearch.org/', verbose=False, logfile=False, timeout=60):
         self.username = username
         self.password = password
+        self.app_key = app_key
+        self.base = base
         self.verbose = verbose
         self.logfile = logfile
         self.timeout = timeout
@@ -118,41 +120,23 @@ class Session:
         """
         while True:
             try:
-                url = "https://www.familysearch.org/auth/familysearch/login"
-                self.write_log("Downloading: " + url)
-                r = requests.get(url, params={"ldsauth": False}, allow_redirects=False)
-                url = r.headers["Location"]
-                self.write_log("Downloading: " + url)
-                r = requests.get(url, allow_redirects=False)
-                idx = r.text.index('name="params" value="')
-                span = r.text[idx + 21 :].index('"')
-                params = r.text[idx + 21 : idx + 21 + span]
-
-                url = "https://ident.familysearch.org/cis-web/oauth2/v3/authorization"
-                self.write_log("Downloading: " + url)
-                r = requests.post(
-                    url,
-                    data={
-                        "params": params,
-                        "userName": self.username,
-                        "password": self.password,
-                    },
-                    allow_redirects=False,
-                )
-
-                if "The username or password was incorrect" in r.text:
+                url = self.base + 'cis-web/oauth2/v3/token'
+                params = {
+                    'username': self.username,
+                    'password': self.password,
+                    'client_id': self.app_key,
+                    'grant_type': 'password'
+                }
+                r = requests.post(url, params=params, allow_redirects=False)
+                if r.status_code == 200:
+                    self.fssessionid = r.json()['token']
+                    self.write_log('FamilySearch session id: ' + self.fssessionid)
+                    self.set_current()
+                    return True
+                if r.status_code == 400 and 'Unable to authenticate user.' in r.text:
                     self.write_log("The username or password was incorrect")
                     return False
 
-                if "Invalid Oauth2 Request" in r.text:
-                    self.write_log("Invalid Oauth2 Request")
-                    time.sleep(self.timeout)
-                    continue
-
-                url = r.headers["Location"]
-                self.write_log("Downloading: " + url)
-                r = requests.get(url, allow_redirects=False)
-                self.fssessionid = r.cookies["fssessionid"]
             except requests.exceptions.ReadTimeout:
                 self.write_log("Read timed out")
                 continue
@@ -172,9 +156,7 @@ class Session:
                 self.write_log("ValueError")
                 time.sleep(self.timeout)
                 continue
-            self.write_log("FamilySearch session id: " + self.fssessionid)
-            self.set_current()
-            return True
+            return False
 
     def get_url(self, url, headers=None):
         """ retrieve JSON structure from a FamilySearch URL """
@@ -185,7 +167,7 @@ class Session:
             try:
                 self.write_log("Downloading: " + url)
                 r = requests.get(
-                    "https://familysearch.org" + url,
+                    self.base + url,
                     cookies={"fssessionid": self.fssessionid},
                     timeout=self.timeout,
                     headers=headers,
@@ -1239,7 +1221,14 @@ def main():
 
     # initialize a FamilySearch session and a family tree object
     print("Login to FamilySearch...", file=sys.stderr)
-    fs = Session(args.username, args.password, args.verbose, args.logfile, args.timeout)
+    fs = Session(
+        args.username,
+        args.password,
+        app_key="you_app_key",
+        verbose=args.verbose,
+        logfile=args.logfile,
+        timeout=args.timeout,
+    )
     if not fs.logged:
         sys.exit(2)
     _ = fs._
