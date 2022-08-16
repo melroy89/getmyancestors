@@ -198,9 +198,7 @@ class Merge(Frame):
                 tree.indi[fid].baptism = ged.indi[num].baptism
                 tree.indi[fid].confirmation = ged.indi[num].confirmation
                 tree.indi[fid].endowment = ged.indi[num].endowment
-                if not (
-                    tree.indi[fid].sealing_child and tree.indi[fid].sealing_child.famc
-                ):
+                if not (tree.indi[fid].sealing_child and tree.indi[fid].sealing_child.famc):
                     tree.indi[fid].sealing_child = ged.indi[num].sealing_child
 
             # add informations about families
@@ -251,9 +249,7 @@ class SignIn(Frame):
         label_username = Label(self, text=_("Username:"))
         entry_username = EntryWithMenu(self, textvariable=self.username, width=30)
         label_password = Label(self, text=_("Password:"))
-        entry_password = EntryWithMenu(
-            self, show="●", textvariable=self.password, width=30
-        )
+        entry_password = EntryWithMenu(self, show="●", textvariable=self.password, width=30)
         label_username.grid(row=0, column=0, pady=15, padx=(0, 5))
         entry_username.grid(row=0, column=1)
         label_password.grid(row=1, column=0, padx=(0, 5))
@@ -272,9 +268,7 @@ class StartIndis(Treeview):
     """List of starting individuals"""
 
     def __init__(self, master, **kwargs):
-        super().__init__(
-            master, selectmode="extended", height=5, columns=("fid",), **kwargs
-        )
+        super().__init__(master, selectmode="extended", height=5, columns=("fid",), **kwargs)
         self.heading("#0", text=_("Name"))
         self.column("#0", width=250)
         self.column("fid", width=80)
@@ -290,20 +284,15 @@ class StartIndis(Treeview):
             messagebox.showinfo(_("Error"), message=_("ID already exist"))
             return None
         if not re.match(r"[A-Z0-9]{4}-[A-Z0-9]{3}", fid):
-            messagebox.showinfo(
-                _("Error"), message=_("Invalid FamilySearch ID: ") + fid
-            )
+            messagebox.showinfo(_("Error"), message=_("Invalid FamilySearch ID: ") + fid)
             return None
-        fs = self.master.master.master.fs
-        data = fs.get_url("/platform/tree/persons/%s" % fid)
+        data = self.master.master.master.get_url("/platform/tree/persons/%s" % fid)
         if data and "persons" in data:
             if "names" in data["persons"][0]:
                 for name in data["persons"][0]["names"]:
                     if name["preferred"]:
                         self.indis[
-                            self.insert(
-                                "", 0, text=name["nameForms"][0]["fullText"], values=fid
-                            )
+                            self.insert("", 0, text=name["nameForms"][0]["fullText"], values=fid)
                         ] = fid
                         return True
         messagebox.showinfo(_("Error"), message=_("Individual not found"))
@@ -347,9 +336,7 @@ class Options(Frame):
         entry_ancestors = EntryWithMenu(self, textvariable=self.ancestors, width=5)
         label_descendants = Label(self, text=_("Number of generations to descend"))
         entry_descendants = EntryWithMenu(self, textvariable=self.descendants, width=5)
-        btn_add_indi = Button(
-            btn, text=_("Add a FamilySearch ID"), command=self.add_indi
-        )
+        btn_add_indi = Button(btn, text=_("Add a FamilySearch ID"), command=self.add_indi)
         btn_spouses = Checkbutton(
             self,
             text="\t" + _("Add spouses and couples information"),
@@ -423,13 +410,9 @@ class Download(Frame):
         self.form = Frame(self)
         self.sign_in = SignIn(self.form)
         self.options = None
-        self.title = Label(
-            self, text=_("Sign In to FamilySearch"), font=("a", 12, "bold")
-        )
+        self.title = Label(self, text=_("Sign In to FamilySearch"), font=("a", 12, "bold"))
         buttons = Frame(self)
-        self.btn_quit = Button(
-            buttons, text=_("Quit"), command=Thread(target=self.quit).start
-        )
+        self.btn_quit = Button(buttons, text=_("Quit"), command=Thread(target=self.quit).start)
         self.btn_valid = Button(
             buttons, text=_("Sign In"), command=self.command_in_thread(self.login)
         )
@@ -442,6 +425,7 @@ class Download(Frame):
         buttons.pack(side="bottom")
         self.pack()
         self.update_needed = False
+        self.loop = asyncio.get_event_loop()
 
     def info(self, text):
         """dislay informations"""
@@ -459,15 +443,16 @@ class Download(Frame):
         with open(filename, "w", encoding="utf-8") as file:
             self.tree.print(file)
 
+    def get_url(url, headers={}):
+        return self.loop.run_until_complete(self.fs.get_url(url, headers))
+
     def login(self):
         """log in FamilySearch"""
         global _
         username = self.sign_in.username.get()
         password = self.sign_in.password.get()
         if not (username and password):
-            messagebox.showinfo(
-                message=_("Please enter your FamilySearch username and password.")
-            )
+            messagebox.showinfo(message=_("Please enter your FamilySearch username and password."))
             return
         self.btn_valid.config(state="disabled")
         self.info(_("Login to FamilySearch..."))
@@ -480,9 +465,7 @@ class Download(Frame):
             timeout=1,
         )
         if not self.fs.logged:
-            messagebox.showinfo(
-                _("Error"), message=_("The username or password was incorrect")
-            )
+            messagebox.showinfo(_("Error"), message=_("The username or password was incorrect"))
             self.btn_valid.config(state="normal")
             self.info("")
             return
@@ -494,7 +477,7 @@ class Download(Frame):
         cache.delete("username")
         cache.add("username", username)
         url = "/service/tree/tree-data/reservations/person/%s/ordinances" % self.fs.fid
-        lds_account = self.fs.get_url(url, {}).get("status") == "OK"
+        lds_account = self.get_url(url, {}).get("status") == "OK"
         self.options = Options(self.form, lds_account)
         self.info("")
         self.sign_in.destroy()
@@ -519,14 +502,11 @@ class Download(Frame):
     def download(self):
         """download family tree"""
         todo = [
-            self.options.start_indis.indis[key]
-            for key in sorted(self.options.start_indis.indis)
+            self.options.start_indis.indis[key] for key in sorted(self.options.start_indis.indis)
         ]
         for fid in todo:
             if not re.match(r"[A-Z0-9]{4}-[A-Z0-9]{3}", fid):
-                messagebox.showinfo(
-                    _("Error"), message=_("Invalid FamilySearch ID: ") + fid
-                )
+                messagebox.showinfo(_("Error"), message=_("Invalid FamilySearch ID: ") + fid)
                 return
         self.start_time = time.time()
         self.options.destroy()
@@ -535,57 +515,22 @@ class Download(Frame):
         self.btn_valid.config(state="disabled")
         self.info(_("Downloading starting individuals..."))
         self.info_tree = True
-        self.tree.add_indis(todo)
-        todo = set(todo)
-        done = set()
-        for i in range(self.options.ancestors.get()):
-            if not todo:
-                break
-            done |= todo
-            self.info(_("Downloading %s. of generations of ancestors...") % (i + 1))
-            todo = self.tree.add_parents(todo) - done
 
-        todo = set(self.tree.indi.keys())
-        done = set()
-        for i in range(self.options.descendants.get()):
-            if not todo:
-                break
-            done |= todo
-            self.info(_("Downloading %s. of generations of descendants...") % (i + 1))
-            todo = self.tree.add_children(todo) - done
-
-        if self.options.spouses.get():
-            self.info(_("Downloading spouses and marriage information..."))
-            todo = set(self.tree.indi.keys())
-            self.tree.add_spouses(todo)
-        ordi = self.options.ordinances.get()
-        cont = self.options.contributors.get()
-
-        async def download_stuff(loop):
-            futures = set()
-            for fid, indi in self.tree.indi.items():
-                futures.add(loop.run_in_executor(None, indi.get_notes))
-                if ordi:
-                    futures.add(
-                        loop.run_in_executor(None, self.tree.add_ordinances, fid)
-                    )
-                if cont:
-                    futures.add(loop.run_in_executor(None, indi.get_contributors))
-            for fam in self.tree.fam.values():
-                futures.add(loop.run_in_executor(None, fam.get_notes))
-                if cont:
-                    futures.add(loop.run_in_executor(None, fam.get_contributors))
-            for future in futures:
-                await future
+        class Foo:
+            write = self.info
 
         loop = asyncio.get_event_loop()
-        self.info(
-            _("Downloading notes")
-            + ((("," if cont else _(" and")) + _(" ordinances")) if ordi else "")
-            + (_(" and contributors") if cont else "")
-            + "..."
+        loop.run_until_complete(
+            self.tree.download_tree(
+                todo,
+                self.options.ancestors.get(),
+                self.options.descendants.get(),
+                self.options.spouses.get(),
+                self.options.contributors.get(),
+                self.options.ordinances.get(),
+                Foo,
+            )
         )
-        loop.run_until_complete(download_stuff(loop))
 
         self.tree.reset_num()
         self.btn_valid.config(command=self.save, state="normal", text=_("Save"))
@@ -613,9 +558,7 @@ class Download(Frame):
             t = round(time.time() - self.start_time)
             minutes = t // 60
             seconds = t % 60
-            self.time.config(
-                text=_("Elapsed time: %s:%s") % (minutes, str(seconds).zfill(2))
-            )
+            self.time.config(text=_("Elapsed time: %s:%s") % (minutes, str(seconds).zfill(2)))
 
     def update_gui(self):
         """update widget"""

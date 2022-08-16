@@ -152,9 +152,7 @@ class Fact:
                     self.map = tree.places[place["description"][1:]]
             if "changeMessage" in data["attribution"]:
                 self.note = Note(data["attribution"]["changeMessage"], tree)
-            if self.type == "http://gedcomx.org/Death" and not (
-                self.date or self.place
-            ):
+            if self.type == "http://gedcomx.org/Death" and not (self.date or self.place):
                 self.value = "Y"
 
     def print(self, file=sys.stdout):
@@ -195,9 +193,9 @@ class Memorie:
             if "titles" in data:
                 self.description = data["titles"][0]["value"]
             if "descriptions" in data:
-                self.description = (
-                    "" if not self.description else self.description + "\n"
-                ) + data["descriptions"][0]["value"]
+                self.description = ("" if not self.description else self.description + "\n") + data[
+                    "descriptions"
+                ][0]["value"]
 
     def print(self, file=sys.stdout):
         """print Memorie in GEDCOM format"""
@@ -314,7 +312,7 @@ class Indi:
         self.sources = set()
         self.memories = set()
 
-    def add_data(self, data):
+    async def add_data(self, data):
         """add FS individual data"""
         if data:
             self.living = data["living"]
@@ -350,9 +348,7 @@ class Indi:
                     else:
                         self.facts.add(Fact(x, self.tree))
             if "sources" in data:
-                sources = self.tree.fs.get_url(
-                    "/platform/tree/persons/%s/sources" % self.fid
-                )
+                sources = await self.tree.fs.get_url("/platform/tree/persons/%s/sources" % self.fid)
                 if sources:
                     quotes = dict()
                     for quote in sources["persons"][0]["sources"]:
@@ -364,19 +360,16 @@ class Indi:
                     for source in sources["sourceDescriptions"]:
                         if source["id"] not in self.tree.sources:
                             self.tree.sources[source["id"]] = Source(source, self.tree)
-                        self.sources.add(
-                            (self.tree.sources[source["id"]], quotes[source["id"]])
-                        )
+                        self.sources.add((self.tree.sources[source["id"]], quotes[source["id"]]))
             if "evidence" in data:
                 url = "/platform/tree/persons/%s/memories" % self.fid
-                memorie = self.tree.fs.get_url(url)
+                memorie = await self.tree.fs.get_url(url)
                 if memorie and "sourceDescriptions" in memorie:
                     for x in memorie["sourceDescriptions"]:
                         if x["mediaType"] == "text/plain":
                             text = "\n".join(
                                 val.get("value", "")
-                                for val in x.get("titles", [])
-                                + x.get("descriptions", [])
+                                for val in x.get("titles", []) + x.get("descriptions", [])
                             )
                             self.notes.add(Note(text, self.tree))
                         else:
@@ -390,16 +383,16 @@ class Indi:
         """add family fid (for child)"""
         self.famc_fid.add(famc)
 
-    def get_notes(self):
+    async def get_notes(self):
         """retrieve individual notes"""
-        notes = self.tree.fs.get_url("/platform/tree/persons/%s/notes" % self.fid)
+        notes = await self.tree.fs.get_url("/platform/tree/persons/%s/notes" % self.fid)
         if notes:
             for n in notes["persons"][0]["notes"]:
                 text_note = "=== %s ===\n" % n["subject"] if "subject" in n else ""
                 text_note += n["text"] + "\n" if "text" in n else ""
                 self.notes.add(Note(text_note, self.tree))
 
-    def get_ordinances(self):
+    async def get_ordinances(self):
         """retrieve LDS ordinances
         need a LDS account
         """
@@ -408,7 +401,7 @@ class Indi:
         if self.living:
             return res, famc
         url = "/service/tree/tree-data/reservations/person/%s/ordinances" % self.fid
-        data = self.tree.fs.get_url(url, {})
+        data = await self.tree.fs.get_url(url, {})
         if data:
             for key, o in data["data"].items():
                 if key == "baptism":
@@ -431,11 +424,11 @@ class Indi:
                     res += o
         return res, famc
 
-    def get_contributors(self):
+    async def get_contributors(self):
         """retrieve contributors"""
         temp = set()
         url = "/platform/tree/persons/%s/changes" % self.fid
-        data = self.tree.fs.get_url(url, {"Accept": "application/x-gedcomx-atom+json"})
+        data = await self.tree.fs.get_url(url, {"Accept": "application/x-gedcomx-atom+json"})
         if data:
             for entries in data["entries"]:
                 for contributors in entries["contributors"]:
@@ -530,14 +523,14 @@ class Fam:
         if child not in self.chil_fid:
             self.chil_fid.add(child)
 
-    def add_marriage(self, fid):
+    async def add_marriage(self, fid):
         """retrieve and add marriage information
         :param fid: the marriage fid
         """
         if not self.fid:
             self.fid = fid
             url = "/platform/tree/couple-relationships/%s" % self.fid
-            data = self.tree.fs.get_url(url)
+            data = await self.tree.fs.get_url(url)
             if data:
                 if "facts" in data["relationships"][0]:
                     for x in data["relationships"][0]["facts"]:
@@ -552,7 +545,7 @@ class Fam:
                         )
                     new_sources = quotes.keys() - self.tree.sources.keys()
                     if new_sources:
-                        sources = self.tree.fs.get_url(
+                        sources = await self.tree.fs.get_url(
                             "/platform/tree/couple-relationships/%s/sources" % self.fid
                         )
                         for source in sources["sourceDescriptions"]:
@@ -560,18 +553,14 @@ class Fam:
                                 source["id"] in new_sources
                                 and source["id"] not in self.tree.sources
                             ):
-                                self.tree.sources[source["id"]] = Source(
-                                    source, self.tree
-                                )
+                                self.tree.sources[source["id"]] = Source(source, self.tree)
                     for source_fid in quotes:
-                        self.sources.add(
-                            (self.tree.sources[source_fid], quotes[source_fid])
-                        )
+                        self.sources.add((self.tree.sources[source_fid], quotes[source_fid]))
 
-    def get_notes(self):
+    async def get_notes(self):
         """retrieve marriage notes"""
         if self.fid:
-            notes = self.tree.fs.get_url(
+            notes = await self.tree.fs.get_url(
                 "/platform/tree/couple-relationships/%s/notes" % self.fid
             )
             if notes:
@@ -580,14 +569,12 @@ class Fam:
                     text_note += n["text"] + "\n" if "text" in n else ""
                     self.notes.add(Note(text_note, self.tree))
 
-    def get_contributors(self):
+    async def get_contributors(self):
         """retrieve contributors"""
         if self.fid:
             temp = set()
             url = "/platform/tree/couple-relationships/%s/changes" % self.fid
-            data = self.tree.fs.get_url(
-                url, {"Accept": "application/x-gedcomx-atom+json"}
-            )
+            data = await self.tree.fs.get_url(url, {"Accept": "application/x-gedcomx-atom+json"})
             if data:
                 for entries in data["entries"]:
                     for contributors in entries["contributors"]:
@@ -644,26 +631,16 @@ class Tree:
             self.display_name = fs.display_name
             self.lang = babelfish.Language.fromalpha2(fs.lang).name
 
-    def add_indis(self, fids):
+    async def add_indis(self, fids):
         """add individuals to the family tree
         :param fids: an iterable of fid
         """
 
-        async def add_datas(loop, data):
-            futures = set()
-            for person in data["persons"]:
-                self.indi[person["id"]] = Indi(person["id"], self)
-                futures.add(
-                    loop.run_in_executor(None, self.indi[person["id"]].add_data, person)
-                )
-            for future in futures:
-                await future
-
         new_fids = [fid for fid in fids if fid and fid not in self.indi]
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # loop = asyncio.new_event_loop()
+        # asyncio.set_event_loop(loop)
         while new_fids:
-            data = self.fs.get_url(
+            data = await self.fs.get_url(
                 "/platform/tree/persons?pids=" + ",".join(new_fids[:MAX_PERSONS])
             )
             if data:
@@ -674,15 +651,15 @@ class Tree:
                                 str(place["latitude"]),
                                 str(place["longitude"]),
                             )
-                loop.run_until_complete(add_datas(loop, data))
+                futures = set()
+                for person in data["persons"]:
+                    self.indi[person["id"]] = Indi(person["id"], self)
+                    futures.add(self.indi[person["id"]].add_data(person))
+                await asyncio.gather(*futures)
                 if "childAndParentsRelationships" in data:
                     for rel in data["childAndParentsRelationships"]:
-                        father = (
-                            rel["parent1"]["resourceId"] if "parent1" in rel else None
-                        )
-                        mother = (
-                            rel["parent2"]["resourceId"] if "parent2" in rel else None
-                        )
+                        father = rel["parent1"]["resourceId"] if "parent1" in rel else None
+                        mother = rel["parent2"]["resourceId"] if "parent2" in rel else None
                         child = rel["child"]["resourceId"] if "child" in rel else None
                         if child in self.indi:
                             self.indi[child].parents.add((father, mother))
@@ -697,13 +674,9 @@ class Tree:
                             person2 = rel["person2"]["resourceId"]
                             relfid = rel["id"]
                             if person1 in self.indi:
-                                self.indi[person1].spouses.add(
-                                    (person1, person2, relfid)
-                                )
+                                self.indi[person1].spouses.add((person1, person2, relfid))
                             if person2 in self.indi:
-                                self.indi[person2].spouses.add(
-                                    (person1, person2, relfid)
-                                )
+                                self.indi[person2].spouses.add((person1, person2, relfid))
             new_fids = new_fids[MAX_PERSONS:]
 
     def add_fam(self, father, mother):
@@ -729,7 +702,7 @@ class Tree:
             self.add_fam(father, mother)
             self.fam[(father, mother)].add_child(child)
 
-    def add_parents(self, fids):
+    async def add_parents(self, fids):
         """add parents relationships
         :param fids: a set of fids
         """
@@ -738,7 +711,7 @@ class Tree:
             for couple in self.indi[fid].parents:
                 parents |= set(couple)
         if parents:
-            self.add_indis(parents)
+            await self.add_indis(parents)
         for fid in fids & self.indi.keys():
             for father, mother in self.indi[fid].parents:
                 if (
@@ -752,39 +725,28 @@ class Tree:
                     self.add_trio(father, mother, fid)
         return set(filter(None, parents))
 
-    def add_spouses(self, fids):
+    async def add_spouses(self, fids):
         """add spouse relationships
         :param fids: a set of fid
         """
 
-        async def add(loop, rels):
-            futures = set()
-            for father, mother, relfid in rels:
-                if (father, mother) in self.fam:
-                    futures.add(
-                        loop.run_in_executor(
-                            None, self.fam[(father, mother)].add_marriage, relfid
-                        )
-                    )
-            for future in futures:
-                await future
-
         rels = set()
         for fid in fids & self.indi.keys():
             rels |= self.indi[fid].spouses
-        loop = asyncio.get_event_loop()
         if rels:
-            self.add_indis(
-                set.union(*({father, mother} for father, mother, relfid in rels))
-            )
+            await self.add_indis(set.union(*({father, mother} for father, mother, relfid in rels)))
             for father, mother, _ in rels:
                 if father in self.indi and mother in self.indi:
                     self.indi[father].add_fams((father, mother))
                     self.indi[mother].add_fams((father, mother))
                     self.add_fam(father, mother)
-            loop.run_until_complete(add(loop, rels))
+            futures = set()
+            for father, mother, relfid in rels:
+                if (father, mother) in self.fam:
+                    futures.add(self.fam[(father, mother)].add_marriage(relfid))
+            await asyncio.gather(*futures)
 
-    def add_children(self, fids):
+    async def add_children(self, fids):
         """add children relationships
         :param fids: a set of fid
         """
@@ -793,7 +755,7 @@ class Tree:
             rels |= self.indi[fid].children if fid in self.indi else set()
         children = set()
         if rels:
-            self.add_indis(set.union(*(set(rel) for rel in rels)))
+            await self.add_indis(set.union(*(set(rel) for rel in rels)))
             for father, mother, child in rels:
                 if child in self.indi and (
                     mother in self.indi
@@ -807,12 +769,12 @@ class Tree:
                     children.add(child)
         return children
 
-    def add_ordinances(self, fid):
+    async def add_ordinances(self, fid):
         """retrieve ordinances
         :param fid: an individual fid
         """
         if fid in self.indi:
-            ret, famc = self.indi[fid].get_ordinances()
+            ret, famc = await self.indi[fid].get_ordinances()
             if famc and famc in self.fam:
                 self.indi[fid].sealing_child.famc = self.fam[famc]
             for o in ret:
@@ -837,6 +799,81 @@ class Tree:
             self.indi[fid].fams_num = set(
                 self.fam[(husb, wife)].num for husb, wife in self.indi[fid].fams_fid
             )
+
+    async def download_tree(
+        self,
+        individuals=None,
+        ascend=4,
+        descend=0,
+        marriage=False,
+        get_contributors=False,
+        get_ordinances=False,
+        file=sys.stderr,
+    ):
+        _ = self.fs._
+
+        # add list of starting individuals to the family tree
+        todo = individuals if individuals else [self.fs.fid]
+        print(_("Downloading starting individuals..."), file=file)
+        await self.add_indis(todo)
+
+        # download ancestors
+        todo = set(self.indi.keys())
+        done = set()
+        for i in range(ascend):
+            if not todo:
+                break
+            done |= todo
+            print(
+                _("Downloading %s. of generations of ancestors...") % (i + 1),
+                file=file,
+            )
+            todo = await self.add_parents(todo) - done
+
+        # download descendants
+        todo = set(self.indi.keys())
+        done = set()
+        for i in range(descend):
+            if not todo:
+                break
+            done |= todo
+            print(
+                _("Downloading %s. of generations of descendants...") % (i + 1),
+                file=file,
+            )
+            todo = await self.add_children(todo) - done
+
+        # download spouses
+        if marriage:
+            print(_("Downloading spouses and marriage information..."), file=sys.stderr)
+            todo = set(self.indi.keys())
+            await self.add_spouses(todo)
+
+        print(
+            _("Downloading notes")
+            + (
+                (("," if get_contributors else _(" and")) + _(" ordinances"))
+                if get_ordinances
+                else ""
+            )
+            + (_(" and contributors") if get_contributors else "")
+            + "...",
+            file=file,
+        )
+
+        # download ordinances, notes and contributors
+        futures = set()
+        for fid, indi in self.indi.items():
+            futures.add(indi.get_notes())
+            if get_ordinances:
+                futures.add(self.add_ordinances(fid))
+            if get_contributors:
+                futures.add(indi.get_contributors())
+        for fam in self.fam.values():
+            futures.add(fam.get_notes())
+            if get_contributors:
+                futures.add(fam.get_contributors())
+        await asyncio.gather(*futures)
 
     def print(self, file=sys.stdout):
         """print family tree in GEDCOM format"""

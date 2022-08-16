@@ -314,10 +314,6 @@ class Gedcom:
                 self.fam[num].chil_fid.add(self.indi[chil].fid)
         for num in self.indi:
             for famc in self.indi[num].famc_num:
-                self.indi[num].famc_fid.add(
-                    (self.fam[famc].husb_fid, self.fam[famc].wife_fid)
-                )
+                self.indi[num].famc_fid.add((self.fam[famc].husb_fid, self.fam[famc].wife_fid))
             for fams in self.indi[num].fams_num:
-                self.indi[num].fams_fid.add(
-                    (self.fam[fams].husb_fid, self.fam[fams].wife_fid)
-                )
+                self.indi[num].fams_fid.add((self.fam[fams].husb_fid, self.fam[fams].wife_fid))

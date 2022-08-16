@@ -21,12 +21,8 @@ def main():
         add_help=False,
         usage="getmyancestors -u username -p password [options]",
     )
-    parser.add_argument(
-        "-u", "--username", metavar="<STR>", type=str, help="FamilySearch username"
-    )
-    parser.add_argument(
-        "-p", "--password", metavar="<STR>", type=str, help="FamilySearch password"
-    )
+    parser.add_argument("-u", "--username", metavar="<STR>", type=str, help="FamilySearch username")
+    parser.add_argument("-p", "--password", metavar="<STR>", type=str, help="FamilySearch password")
     parser.add_argument(
         "-i",
         "--individuals",
@@ -133,13 +129,9 @@ def main():
             if not re.match(r"[A-Z0-9]{4}-[A-Z0-9]{3}", fid):
                 sys.exit("Invalid FamilySearch ID: " + fid)
 
-    args.username = (
-        args.username if args.username else input("Enter FamilySearch username: ")
-    )
+    args.username = args.username if args.username else input("Enter FamilySearch username: ")
     args.password = (
-        args.password
-        if args.password
-        else getpass.getpass("Enter FamilySearch password: ")
+        args.password if args.password else getpass.getpass("Enter FamilySearch password: ")
     )
 
     time_count = time.time()
@@ -157,19 +149,13 @@ def main():
         settings_name = args.outfile.name.split(".")[0] + ".settings"
         try:
             with open(settings_name, "w") as settings_file:
-                settings_file.write(
-                    formatting.format("time stamp: ", time.strftime("%X %x %Z"))
-                )
+                settings_file.write(formatting.format("time stamp: ", time.strftime("%X %x %Z")))
                 for action in parser._actions:
                     settings_file.write(
-                        formatting.format(
-                            action.option_strings[-1], parse_action(action)
-                        )
+                        formatting.format(action.option_strings[-1], parse_action(action))
                     )
         except OSError as exc:
-            print(
-                "Unable to write %s: %s" % (settings_name, repr(exc)), file=sys.stderr
-            )
+            print("Unable to write %s: %s" % (settings_name, repr(exc)), file=sys.stderr)
 
     # initialize a FamilySearch session and a family tree object
     print("Login to FamilySearch...", file=sys.stderr)
@@ -179,82 +165,27 @@ def main():
     _ = fs._
     tree = Tree(fs)
 
+    loop = asyncio.get_event_loop()
+
     # check LDS account
     if args.get_ordinances:
-        test = fs.get_url(
-            "/service/tree/tree-data/reservations/person/%s/ordinances" % fs.fid, {}
+        test = loop.run_until_complete(
+            fs.get_url("/service/tree/tree-data/reservations/person/%s/ordinances" % fs.fid, {})
         )
         if test["status"] != "OK":
             sys.exit(2)
 
     try:
-        # add list of starting individuals to the family tree
-        todo = args.individuals if args.individuals else [fs.fid]
-        print(_("Downloading starting individuals..."), file=sys.stderr)
-        tree.add_indis(todo)
-
-        # download ancestors
-        todo = set(tree.indi.keys())
-        done = set()
-        for i in range(args.ascend):
-            if not todo:
-                break
-            done |= todo
-            print(
-                _("Downloading %s. of generations of ancestors...") % (i + 1),
-                file=sys.stderr,
+        loop.run_until_complete(
+            tree.download_tree(
+                args.individuals,
+                args.ascend,
+                args.descend,
+                args.marriage,
+                args.get_contributors,
+                args.get_ordinances,
             )
-            todo = tree.add_parents(todo) - done
-
-        # download descendants
-        todo = set(tree.indi.keys())
-        done = set()
-        for i in range(args.descend):
-            if not todo:
-                break
-            done |= todo
-            print(
-                _("Downloading %s. of generations of descendants...") % (i + 1),
-                file=sys.stderr,
-            )
-            todo = tree.add_children(todo) - done
-
-        # download spouses
-        if args.marriage:
-            print(_("Downloading spouses and marriage information..."), file=sys.stderr)
-            todo = set(tree.indi.keys())
-            tree.add_spouses(todo)
-
-        # download ordinances, notes and contributors
-        async def download_stuff(loop):
-            futures = set()
-            for fid, indi in tree.indi.items():
-                futures.add(loop.run_in_executor(None, indi.get_notes))
-                if args.get_ordinances:
-                    futures.add(loop.run_in_executor(None, tree.add_ordinances, fid))
-                if args.get_contributors:
-                    futures.add(loop.run_in_executor(None, indi.get_contributors))
-            for fam in tree.fam.values():
-                futures.add(loop.run_in_executor(None, fam.get_notes))
-                if args.get_contributors:
-                    futures.add(loop.run_in_executor(None, fam.get_contributors))
-            for future in futures:
-                await future
-
-        loop = asyncio.get_event_loop()
-        print(
-            _("Downloading notes")
-            + (
-                (("," if args.get_contributors else _(" and")) + _(" ordinances"))
-                if args.get_ordinances
-                else ""
-            )
-            + (_(" and contributors") if args.get_contributors else "")
-            + "...",
-            file=sys.stderr,
         )
-        loop.run_until_complete(download_stuff(loop))
-
     finally:
         # compute number for family relationships and print GEDCOM file
         tree.reset_num()

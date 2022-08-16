@@ -97,9 +97,7 @@ translations = {
         "ru": "Название племени",
         "zh": "部落名字",
     },
-    "Downloading starting individuals...": {
-        "fr": "Téléchargement des personnes de départ..."
-    },
+    "Downloading starting individuals...": {"fr": "Téléchargement des personnes de départ..."},
     "Downloading %s. of generations of descendants...": {
         "fr": "Téléchargement de %s génération(s) de descendants..."
     },
